@@ -9,13 +9,8 @@
 
   :root {
     --bg-1: #050510;
-    --bg-2: #0f0f22;
-    --bg-3: #1a0b2e;
     --bot: rgba(255, 255, 255, 0.07);
     --user: linear-gradient(135deg, #a855f7, #6366f1);
-    --accent: #a855f7;
-    --accent-2: #6366f1;
-    --accent-3: #ec4899;
     --text: #f1f5f9;
     --muted: #94a3b8;
     --border: rgba(255, 255, 255, 0.08);
@@ -323,7 +318,6 @@
     100% { transform: scale(1) rotate(0); }
   }
 
-  /* Typing indicator */
   .typing {
     align-self: flex-start;
     padding: 14px 18px;
@@ -406,7 +400,6 @@
     background: linear-gradient(135deg, rgba(168,85,247,0.4), rgba(236,72,153,0.4));
   }
 
-  /* input */
   .input-wrap {
     display: flex; gap: 8px; align-items: flex-end;
     background: rgba(255,255,255,0.04);
@@ -442,7 +435,7 @@
   }
   .send-btn:active { transform: scale(0.88); }
 
-  /* ============ CONFETTI & FX ============ */
+  /* ============ FX ============ */
   .confetti {
     position: fixed;
     z-index: 200;
@@ -475,7 +468,6 @@
     40%, 60% { transform: translate3d(6px, 0, 0); }
   }
 
-  /* flash */
   .flash {
     position: fixed; inset: 0; z-index: 300;
     background: radial-gradient(circle, rgba(255,255,255,0.9), transparent 70%);
@@ -531,6 +523,11 @@
 </div>
 
 <script>
+/* =========================================================
+   FORMSPREE CONFIG — DAH SIAP
+   ========================================================= */
+const FORMSPREE_URL = 'https://formspree.io/f/xyezwjgn';
+
 /* ================== STARS ================== */
 (function() {
   const wrap = document.getElementById('stars');
@@ -593,7 +590,6 @@ function noise(duration = 0.1, vol = 0.03, delay = 0) {
   src.start(t); src.stop(t + duration + 0.05);
 }
 
-// SFX library
 const SFX = {
   incoming() {
     tone(880, 0.08, 'sine', 0.035, 0);
@@ -620,16 +616,13 @@ const SFX = {
     tone(1750, 0.25, 'sine', 0.03, 0.16);
   },
   celebration() {
-    // Big major chord + arpeggio
     const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51];
     notes.forEach((n, i) => tone(n, 0.5, 'sine', 0.06, i * 0.09));
-    // Sparkle
     setTimeout(() => {
       for (let i = 0; i < 8; i++) {
         tone(1500 + Math.random() * 1500, 0.15, 'sine', 0.03, i * 0.07);
       }
     }, 500);
-    // Bass
     tone(130.81, 0.9, 'sine', 0.05, 0);
   },
   whoosh() {
@@ -918,12 +911,16 @@ const nodes = {
   }
 };
 
-/* ================== HELPERS ================== */
+/* ================== STATE ================== */
 const chatEl = document.getElementById('chat');
 const replyArea = document.getElementById('replyArea');
 const statusText = document.getElementById('statusText');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+let answers = [];
+let answersSent = false;
+
+/* ================== HELPERS ================== */
 function scrollChat() { chatEl.scrollTop = chatEl.scrollHeight; }
 
 function addMsg(text, who, reaction = null) {
@@ -949,7 +946,6 @@ function showTyping() {
   chatEl.appendChild(el);
   scrollChat();
   statusText.textContent = 'typing...';
-  // typing tick loop
   let ticks = 0;
   const iv = setInterval(() => {
     SFX.typingTick();
@@ -988,6 +984,7 @@ function showOptions(options) {
       vibrate(12);
       clearReply();
       addMsg(opt.text, 'user');
+      recordAnswer(opt.text);
       SFX.send();
       setTimeout(() => runNode(opt.next), 550);
     });
@@ -995,7 +992,7 @@ function showOptions(options) {
   });
 }
 
-function showInput(placeholder, next, reaction) {
+function showInput(placeholder, next) {
   replyArea.innerHTML = '';
   replyArea.classList.remove('hidden');
 
@@ -1026,8 +1023,9 @@ function showInput(placeholder, next, reaction) {
     vibrate(15);
     clearReply();
     addMsg(val, 'user');
+    recordAnswer(val);
     SFX.send();
-    setTimeout(() => runNode(next, reaction), 550);
+    setTimeout(() => runNode(next), 550);
   };
 
   sendBtn.addEventListener('click', submit);
@@ -1035,14 +1033,62 @@ function showInput(placeholder, next, reaction) {
   setTimeout(() => input.focus(), 220);
 }
 
-async function runNode(id, userReaction = null) {
+/* Simpan jawapan ke array */
+function recordAnswer(text) {
+  answers.push({
+    step: answers.length + 1,
+    answer: text,
+    time: new Date().toISOString()
+  });
+}
+
+/* ================== FORMSPREE SEND ================== */
+async function sendAnswersToFormspree(finalAnswer) {
+  if (answersSent) return; // elak double send
+  answersSent = true;
+
+  const readable = answers.map((a, i) => {
+    return `Q${i + 1}: ${a.answer}`;
+  }).join('\n');
+
+  const payload = {
+    _subject: '💌 Iva dah jawab!',
+    name: 'Iva Mayra',
+    total_answered: answers.length,
+    all_answers: readable,
+    final_answer: finalAnswer || '-',
+    submitted_at: new Date().toLocaleString('en-MY', {
+      dateStyle: 'full',
+      timeStyle: 'short'
+    })
+  };
+
+  try {
+    const res = await fetch(FORMSPREE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      console.log('✅ Jawapan berjaya dihantar ke Formspree');
+    } else {
+      console.warn('⚠️ Formspree respons:', res.status);
+    }
+  } catch (err) {
+    console.error('❌ Gagal hantar:', err);
+  }
+}
+
+/* ================== RUN NODE ================== */
+async function runNode(id) {
   const node = nodes[id];
   if (!node) return;
 
-  // small pause after user's reply
-  if (userReaction === null && id !== 'q1') {
-    await sleep(250);
-  }
+  if (id !== 'q1') await sleep(250);
 
   for (let i = 0; i < node.msgs.length; i++) {
     const text = node.msgs[i];
@@ -1052,7 +1098,6 @@ async function runNode(id, userReaction = null) {
     await sleep(typeTime);
     hideTyping();
 
-    // last message may carry a reaction
     const react = (i === node.msgs.length - 1 && node.reaction) ? node.reaction : null;
     addMsg(text, 'bot', react);
     SFX.incoming();
@@ -1062,6 +1107,10 @@ async function runNode(id, userReaction = null) {
   }
 
   if (node.ending) {
+    // Ambil jawapan terakhir dari user (kalau ada)
+    const lastAnswer = answers[answers.length - 1]?.answer || '';
+    sendAnswersToFormspree(lastAnswer);
+
     if (node.celebration) {
       setTimeout(() => {
         SFX.celebration();
@@ -1075,25 +1124,22 @@ async function runNode(id, userReaction = null) {
   await sleep(280);
 
   if (node.input) {
-    showInput(node.placeholder, node.next, node.reaction);
+    showInput(node.placeholder, node.next);
   } else if (node.options) {
     showOptions(node.options);
   }
 }
 
-/* ================== CELEBRATION FX ================== */
+/* ================== CELEBRATION ================== */
 function burstCelebration() {
-  // screen flash
   const flash = document.createElement('div');
   flash.className = 'flash';
   document.body.appendChild(flash);
   setTimeout(() => flash.remove(), 800);
 
-  // shake
   document.body.classList.add('shake');
   setTimeout(() => document.body.classList.remove('shake'), 650);
 
-  // confetti
   const colors = ['#a855f7','#6366f1','#ec4899','#f472b6','#fbbf24','#34d399','#60a5fa','#c4b5fd'];
   for (let i = 0; i < 140; i++) {
     setTimeout(() => {
@@ -1114,7 +1160,6 @@ function burstCelebration() {
     }, i * 18);
   }
 
-  // floating hearts
   const hearts = ['🤍','💜','💖','✨','💫','💕'];
   for (let i = 0; i < 30; i++) {
     setTimeout(() => {
@@ -1130,7 +1175,6 @@ function burstCelebration() {
     }, i * 90);
   }
 
-  // continuous sparkle loop for a few seconds
   let sparkleCount = 0;
   const sparkleInt = setInterval(() => {
     SFX.typingTick();
